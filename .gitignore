@@ -1,0 +1,10 @@
+*.db
+*.csv
+__pycache__/
+*.pyc
+.env
+*.mp4
+lzma/
+plus_dm
+docs/
+*.bi5
