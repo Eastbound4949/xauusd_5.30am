@@ -12,6 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import trader
 import strategy
+import notify
 
 log = logging.getLogger("scheduler")
 logging.basicConfig(level=logging.INFO,
@@ -51,6 +52,9 @@ def job_check_signal():
                 f"SL={opened['sl']:.2f} TP={opened['tp']:.2f} Risk=${opened['risk_amount']:.2f}",
                 "TRADE"
             )
+            notify.trade_opened(opened)
+        else:
+            notify.no_signal(sig.get("reason", "no reason"))
     except Exception as e:
         _log_event(f"Signal check error: {e}", "ERROR")
 
@@ -69,6 +73,7 @@ def job_monitor_position():
                 f"Balance=${closed['balance']:.2f}",
                 "TRADE"
             )
+            notify.trade_closed(closed)
     except Exception as e:
         _log_event(f"Monitor error: {e}", "ERROR")
 
@@ -86,6 +91,13 @@ def start() -> BackgroundScheduler:
     sched.add_job(job_monitor_position,
                   IntervalTrigger(minutes=5),
                   id="monitor", replace_existing=True)
+
+    # Daily summary at 08:00 UTC
+    sched.add_job(
+        lambda: notify.daily_summary(trader.get_stats()),
+        CronTrigger(hour=8, minute=0, timezone="UTC"),
+        id="summary", replace_existing=True,
+    )
 
     sched.start()
     _log_event("Scheduler started — signal job at 05:05 UTC, monitor every 5 min")
