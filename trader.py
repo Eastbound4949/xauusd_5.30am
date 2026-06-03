@@ -191,6 +191,33 @@ def get_equity_log() -> list[dict]:
         return [dict(r) for r in reversed(rows)]
 
 
+def log_event(msg: str, level: str = "INFO"):
+    with _conn() as c:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                ts TEXT, level TEXT, msg TEXT
+            )
+        """)
+        c.execute("INSERT INTO events VALUES (?,?,?)", (utc_now(), level, msg))
+        c.execute("""
+            DELETE FROM events WHERE rowid NOT IN (
+                SELECT rowid FROM events ORDER BY rowid DESC LIMIT 200
+            )
+        """)
+
+
+def get_events(limit: int = 20) -> list[dict]:
+    with _conn() as c:
+        try:
+            rows = c.execute(
+                "SELECT ts, level, msg FROM events ORDER BY rowid DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except sqlite3.OperationalError:
+            return []
+
+
 def get_stats() -> dict:
     trades = get_trades(1000)
     if not trades:

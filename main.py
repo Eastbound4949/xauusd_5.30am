@@ -10,7 +10,6 @@ import plotly.graph_objects as go
 from datetime import datetime, timezone
 
 import trader
-import scheduler as sched_mod
 from config import (
     CAPITAL_START, RISK_PCT, REWARD_RATIO,
     EMA_PERIOD, ADX_MIN, RANGE_HOURS, THRESHOLD,
@@ -22,11 +21,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Start scheduler once per process ─────────────────────────────────────────
-if "scheduler_started" not in st.session_state:
-    trader.init_db()
-    sched_mod.start()
-    st.session_state["scheduler_started"] = True
+trader.init_db()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("XAUUSD 5:30 AM Paper Trading Bot")
@@ -115,13 +110,13 @@ else:
 
 # ── Event log ─────────────────────────────────────────────────────────────────
 st.subheader("Bot Log")
-events = sched_mod.get_events()
+events = trader.get_events(20)
 if events:
     for ev in events[:20]:
         colour = {"TRADE": "green", "ERROR": "red"}.get(ev["level"], "gray")
         st.markdown(
             f"<span style='color:{colour};font-family:monospace'>"
-            f"[{ev['ts']}] {ev['msg']}</span>",
+            f"{ev['msg']}</span>",
             unsafe_allow_html=True,
         )
 else:
@@ -142,10 +137,12 @@ with st.sidebar:
     st.write(f"**Monitor:** every 5 min")
     st.divider()
     if st.button("Force signal check now"):
-        sched_mod.job_check_signal()
+        import scheduler as _sched
+        _sched.job_check_signal()
         st.rerun()
     if st.button("Force position check now"):
-        sched_mod.job_monitor_position()
+        import scheduler as _sched
+        _sched.job_monitor_position()
         st.rerun()
     st.divider()
     st.caption(f"UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}")

@@ -15,22 +15,19 @@ import strategy
 import notify
 
 log = logging.getLogger("scheduler")
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
-
-_events: list[dict] = []   # in-memory event log for dashboard
 
 
 def _log_event(msg: str, level: str = "INFO"):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    _events.insert(0, {"ts": ts, "msg": msg, "level": level})
-    if len(_events) > 100:
-        _events.pop()
     log.info(msg)
+    try:
+        trader.log_event(f"[{ts}] {msg}", level)
+    except Exception:
+        pass
 
 
 def get_events() -> list[dict]:
-    return _events
+    return trader.get_events(20)
 
 
 def job_check_signal():
