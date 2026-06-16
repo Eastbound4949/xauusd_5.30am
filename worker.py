@@ -11,10 +11,12 @@ import time
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
+    stream=sys.stdout,
     force=True,
 )
 log = logging.getLogger("worker")
 
+import notify
 import trader
 import scheduler as sched_mod
 
@@ -27,6 +29,7 @@ def main():
     log.info("=" * 50)
 
     trader.init_db()
+    notify.bot_started(trader.get_balance())
     sched = sched_mod.start()
 
     def _shutdown(signum, frame):
