@@ -21,6 +21,14 @@ def send(msg: str) -> bool:
         return False
 
 
+def bot_started(balance: float):
+    send(
+        f"<b>XAUUSD 5:30AM BOT STARTED</b>\n"
+        f"Paper bot live on Railway\n"
+        f"Balance: <b>${balance:,.2f}</b>  Signal: 05:05 UTC daily  Monitor: every 5min"
+    )
+
+
 def trade_opened(pos: dict):
     send(
         f"<b>XAUUSD BOT — TRADE OPENED</b>\n"
