@@ -220,8 +220,6 @@ def get_events(limit: int = 20) -> list[dict]:
 
 def get_stats() -> dict:
     trades = get_trades(1000)
-    if not trades:
-        return {"trades": 0}
     wins   = [t for t in trades if t["profit"] > 0]
     losses = [t for t in trades if t["profit"] <= 0]
     total_profit = sum(t["profit"] for t in trades)
