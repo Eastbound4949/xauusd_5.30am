@@ -114,28 +114,46 @@ def open_trade(signal: dict) -> dict:
 def check_and_close(current_price: float | None = None) -> dict | None:
     """
     Check if open position hit SL or TP.
+    Scans every 1-min bar since entry (not just the latest price) so a wick
+    touch or a fill missed during downtime/redeploy is still caught.
     Returns closed trade dict if closed, else None.
     """
     pos = get_position()
     if pos is None:
         return None
 
-    if current_price is None:
-        current_price = _fetch_price()
-
     direction = pos["direction"]
-    hit_sl = hit_tp = False
+    bars = _fetch_bars_since(pos["entry_time"])
 
-    if direction == "buy":
-        if current_price <= pos["sl"]:
-            hit_sl = True
-        elif current_price >= pos["tp"]:
-            hit_tp = True
+    hit_sl = hit_tp = False
+    exit_price = current_price
+
+    if bars is not None and not bars.empty:
+        for _, bar in bars.iterrows():
+            bar_high, bar_low = float(bar["High"]), float(bar["Low"])
+            if direction == "buy":
+                hit_sl = bar_low  <= pos["sl"]
+                hit_tp = bar_high >= pos["tp"]
+            else:
+                hit_sl = bar_high >= pos["sl"]
+                hit_tp = bar_low  <= pos["tp"]
+            if hit_sl or hit_tp:
+                exit_price = pos["sl"] if hit_sl else pos["tp"]
+                break
     else:
-        if current_price >= pos["sl"]:
-            hit_sl = True
-        elif current_price <= pos["tp"]:
-            hit_tp = True
+        # Fallback: no bar history available — check latest close only.
+        if exit_price is None:
+            exit_price = _fetch_price()
+        if direction == "buy":
+            if exit_price <= pos["sl"]:
+                hit_sl = True
+            elif exit_price >= pos["tp"]:
+                hit_tp = True
+        else:
+            if exit_price >= pos["sl"]:
+                hit_sl = True
+            elif exit_price <= pos["tp"]:
+                hit_tp = True
 
     if not hit_sl and not hit_tp:
         return None
@@ -155,10 +173,10 @@ def check_and_close(current_price: float | None = None) -> dict | None:
         """, (
             pos["direction"], pos["entry_time"], pos["entry_price"],
             pos["sl"], pos["tp"], pos["sl_dist"], pos["risk_amount"],
-            utc_now(), current_price, exit_reason, profit, bal,
+            utc_now(), exit_price, exit_reason, profit, bal,
         ))
 
-    return {**pos, "exit_price": current_price, "exit_reason": exit_reason,
+    return {**pos, "exit_price": exit_price, "exit_reason": exit_reason,
             "profit": profit, "balance": bal}
 
 
@@ -171,6 +189,25 @@ def _fetch_price() -> float:
                 df.columns = df.columns.get_level_values(0)
             return float(df["Close"].iloc[-1])
     raise RuntimeError("Cannot fetch current price")
+
+
+def _fetch_bars_since(entry_time_iso: str) -> pd.DataFrame | None:
+    """1-min OHLC bars from entry_time to now, for SL/TP scan. None if unavailable."""
+    for sym in (SYMBOL, SYMBOL_FALLBACK):
+        df = yf.download(sym, period="2d", interval="1m",
+                         auto_adjust=True, progress=False)
+        if not df.empty:
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            idx = df.index
+            idx = idx.tz_localize("UTC") if idx.tz is None else idx.tz_convert("UTC")
+            df = df.set_axis(idx)
+
+            entry_ts = pd.Timestamp(entry_time_iso)
+            entry_ts = entry_ts.tz_localize("UTC") if entry_ts.tzinfo is None else entry_ts.tz_convert("UTC")
+
+            return df[df.index >= entry_ts]
+    return None
 
 
 # ── Query helpers ─────────────────────────────────────────────────────────────
